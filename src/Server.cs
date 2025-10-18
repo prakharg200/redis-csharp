@@ -4,7 +4,6 @@ using System.Text;
 
 TcpListener server = new TcpListener(IPAddress.Any, 6379);
 server.Start();
-server.AcceptSocket(); // wait for client
 
 while (true)
 {
