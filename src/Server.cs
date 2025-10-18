@@ -9,9 +9,20 @@ while (true)
 {
     Socket client = server.AcceptSocket();
 
-    string response = "+PONG\r\n";
-    byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-    client.Send(responseBytes);
+    byte[] buffer = new byte[1024];
+
+    while (client.Connected)
+    {
+        int bytesRead = client.Receive(buffer);
+        if (bytesRead == 0)
+        {
+            break;
+        }
+
+        string response = "+PONG\r\n";
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        client.Send(responseBytes);
+    }
 
     client.Close();
 }
