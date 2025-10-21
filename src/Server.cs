@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Collections.Concurrent;
 
-ConcurrentDictionary<string, string> dataStore = new ConcurrentDictionary<string, string>();
+ConcurrentDictionary<string, CacheEntry> dataStore = new ConcurrentDictionary<string, CacheEntry>();
 
 TcpListener server = new TcpListener(IPAddress.Any, 6379);
 server.Start();
@@ -67,9 +67,21 @@ string ProcessCommand(string request)
 
         string key = parts[1];
         string value = parts[2];
-        dataStore[key] = value;  // Store or update
+        DateTime? expiryTime = null;
 
-        Console.WriteLine($"SET {key} = {value}");
+        if(parts.Count >= 5 && parts[3].ToUpperInvariant() == "PX")
+        {
+            if(int.TryParse(parts[4], out int milliseconds))
+            {
+                expiryTime = DateTime.UtcNow.AddMilliseconds(milliseconds);
+            }
+            else
+            {
+                return "-ERR invalid PX value\r\n";
+            }
+        }
+
+        dataStore[key] = new CacheEntry { Value = value, ExpiryTime = expiryTime };  // Store or update
         return "+OK\r\n";
     }
     else if (command == "GET")
@@ -80,9 +92,15 @@ string ProcessCommand(string request)
         }
         string key = parts[1];
 
-        if (dataStore.TryGetValue(key, out string value))
+        if (dataStore.TryGetValue(key, out var entry))
         {
-            return EncodeBulkString(value);
+            if(entry.ExpiryTime.HasValue && entry.ExpiryTime.Value <= DateTime.UtcNow)
+            {
+                dataStore.TryRemove(key, out _);
+                Console.WriteLine($"GET {key} = (expired)");
+                return "$-1\r\n";
+            }
+            return EncodeBulkString(entry.Value);
         }
         return "$-1\r\n";
     }
@@ -126,4 +144,10 @@ static List<string> ParseRESPArray(string request)
 static string EncodeBulkString(string value)
 {
     return $"${value.Length}\r\n{value}\r\n";
+}
+
+class CacheEntry
+{
+    public string Value { get; set; }
+    public DateTime? ExpiryTime { get; set; }
 }
