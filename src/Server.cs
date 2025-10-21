@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Collections.Concurrent;
+
+ConcurrentDictionary<string, string> dataStore = new ConcurrentDictionary<string, string>();
 
 TcpListener server = new TcpListener(IPAddress.Any, 6379);
 server.Start();
@@ -11,7 +14,7 @@ while (true)
     _ = HandleClientAsync(client);
 }
 
-static async Task HandleClientAsync(Socket client)
+async Task HandleClientAsync(Socket client)
 {
     while (client.Connected)
     {
@@ -34,7 +37,7 @@ static async Task HandleClientAsync(Socket client)
     client.Close();
 }
 
-static string ProcessCommand(string request)
+string ProcessCommand(string request)
 {
     var parts = ParseRESPArray(request);
     if (parts.Count == 0)
@@ -42,7 +45,7 @@ static string ProcessCommand(string request)
         return "-ERR invalid command\r\n";
     }
     string command = parts[0].ToUpperInvariant();
-    
+
     if (command == "PING")
     {
         return "+PONG\r\n";
@@ -54,6 +57,34 @@ static string ProcessCommand(string request)
             return "-ERR wrong number of arguments for 'ECHO' command\r\n";
         }
         return EncodeBulkString(parts[1]);
+    }
+    else if (command == "SET")
+    {
+        if (parts.Count < 3)
+        {
+            return "-ERR wrong number of arguments for 'SET' command\r\n";
+        }
+
+        string key = parts[1];
+        string value = parts[2];
+        dataStore[key] = value;  // Store or update
+
+        Console.WriteLine($"SET {key} = {value}");
+        return "+OK\r\n";
+    }
+    else if (command == "GET")
+    {
+        if (parts.Count < 2)
+        {
+            return "-ERR wrong number of arguments for 'GET' command\r\n";
+        }
+        string key = parts[1];
+
+        if (dataStore.TryGetValue(key, out string value))
+        {
+            return EncodeBulkString(value);
+        }
+        return "$-1\r\n";
     }
 
     return "-ERR unknown command\r\n";
