@@ -112,9 +112,13 @@ string ProcessCommand(string request)
         }
 
         string listKey = parts[1];
-        string valueToPush = parts[2];
         var list = listStore.GetOrAdd(listKey, _ => new List<string>());
-        list.Add(valueToPush);
+        
+        for (int i=2; i < parts.Count; i++)
+        {
+            string valueToPush = parts[i];
+            list.Add(valueToPush);
+        }
 
         return $":{list.Count}\r\n";
     }
