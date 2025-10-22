@@ -4,6 +4,7 @@ using System.Text;
 using System.Collections.Concurrent;
 
 ConcurrentDictionary<string, CacheEntry> dataStore = new ConcurrentDictionary<string, CacheEntry>();
+ConcurrentDictionary<string, List<string>> listStore = new ConcurrentDictionary<string, List<string>>();
 
 TcpListener server = new TcpListener(IPAddress.Any, 6379);
 server.Start();
@@ -69,9 +70,9 @@ string ProcessCommand(string request)
         string value = parts[2];
         DateTime? expiryTime = null;
 
-        if(parts.Count >= 5 && parts[3].ToUpperInvariant() == "PX")
+        if (parts.Count >= 5 && parts[3].ToUpperInvariant() == "PX")
         {
-            if(int.TryParse(parts[4], out int milliseconds))
+            if (int.TryParse(parts[4], out int milliseconds))
             {
                 expiryTime = DateTime.UtcNow.AddMilliseconds(milliseconds);
             }
@@ -94,7 +95,7 @@ string ProcessCommand(string request)
 
         if (dataStore.TryGetValue(key, out var entry))
         {
-            if(entry.ExpiryTime.HasValue && entry.ExpiryTime.Value <= DateTime.UtcNow)
+            if (entry.ExpiryTime.HasValue && entry.ExpiryTime.Value <= DateTime.UtcNow)
             {
                 dataStore.TryRemove(key, out _);
                 Console.WriteLine($"GET {key} = (expired)");
@@ -103,6 +104,19 @@ string ProcessCommand(string request)
             return EncodeBulkString(entry.Value);
         }
         return "$-1\r\n";
+    }
+    else if (command == "RPUSH"){
+        if (parts.Count < 3)
+        {
+            return "-ERR wrong number of arguments for 'RPUSH' command\r\n";
+        }
+
+        string listKey = parts[1];
+        string valueToPush = parts[2];
+        var list = listStore.GetOrAdd(listKey, _ => new List<string>());
+        list.Add(valueToPush);
+
+        return $":{list.Count}\r\n";
     }
 
     return "-ERR unknown command\r\n";
