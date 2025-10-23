@@ -57,7 +57,7 @@ string ProcessCommand(string request)
         {
             return "-ERR wrong number of arguments for 'ECHO' command\r\n";
         }
-        return EncodeBulkString(parts[1]);
+        return $"${parts[1].Length}\r\n{parts[1]}\r\n";
     }
     else if (command == "SET")
     {
@@ -101,11 +101,12 @@ string ProcessCommand(string request)
                 Console.WriteLine($"GET {key} = (expired)");
                 return "$-1\r\n";
             }
-            return EncodeBulkString(entry.Value);
+            return $"${entry.Value.Length}\r\n{entry.Value}\r\n";
         }
         return "$-1\r\n";
     }
-    else if (command == "RPUSH"){
+    else if (command == "RPUSH")
+    {
         if (parts.Count < 3)
         {
             return "-ERR wrong number of arguments for 'RPUSH' command\r\n";
@@ -113,14 +114,53 @@ string ProcessCommand(string request)
 
         string listKey = parts[1];
         var list = listStore.GetOrAdd(listKey, _ => new List<string>());
-        
-        for (int i=2; i < parts.Count; i++)
+
+        for (int i = 2; i < parts.Count; i++)
         {
             string valueToPush = parts[i];
             list.Add(valueToPush);
         }
 
         return $":{list.Count}\r\n";
+    }
+    else if (command == "LRANGE")
+    {
+        if (parts.Count < 4)
+        {
+            return "-ERR wrong number of arguments for 'LRANGE' command\r\n";
+        }
+        string listKey = parts[1];
+        if (!listStore.TryGetValue(listKey, out var list))
+        {
+            return "*0\r\n";
+        }
+
+        // Parse indices
+        if (!int.TryParse(parts[2], out int start) || !int.TryParse(parts[3], out int stop))
+        {
+            return "-ERR value is not an integer or out of range\r\n";
+        }
+
+        var listLen = list.Count;
+
+        // Normalize negative indices (Redis supports negative indices)
+        if (start < 0) start = 0;
+        if (stop < 0) stop = 0;
+        
+        if (stop >= listLen)
+        {
+            stop = listLen - 1;
+        }
+        if (start >= 0 && start <= stop)
+        {
+            var responseList = new List<string>();
+            for (int i = start; i <= stop; i++)
+            {
+                responseList.Add(list[i]);
+            }
+            return EncodeArray(responseList);
+        }
+        return "*0\r\n";
     }
 
     return "-ERR unknown command\r\n";
@@ -159,13 +199,21 @@ static List<string> ParseRESPArray(string request)
     return result;
 }
 
-static string EncodeBulkString(string value)
+static string EncodeArray(List<string> items)
 {
-    return $"${value.Length}\r\n{value}\r\n";
+    StringBuilder sb = new StringBuilder();
+    sb.Append($"*{items.Count}\r\n");
+    foreach (var item in items)
+    {
+        sb.Append($"${item.Length}\r\n{item}\r\n");
+    }
+    return sb.ToString();
 }
+
 
 class CacheEntry
 {
     public string Value { get; set; }
     public DateTime? ExpiryTime { get; set; }
 }
+
