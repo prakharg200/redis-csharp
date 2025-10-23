@@ -143,7 +143,10 @@ string ProcessCommand(string request)
 
         var listLen = list.Count;
 
-        // Normalize negative indices (Redis supports negative indices)
+        // support negative indices (Redis supports negative indices)
+        if (start < 0) start = listLen + start;
+        if (stop < 0) stop = listLen + stop;
+
         if (start < 0) start = 0;
         if (stop < 0) stop = 0;
         
