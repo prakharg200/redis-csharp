@@ -26,15 +26,19 @@ jobs:
         Write-Host "Installing Redis via Chocolatey..."
         choco install redis-64 -y
         
-        # Add Redis to PATH
+        # Wait for installation to complete
+        Start-Sleep -Seconds 5
+        
+        # Find redis-cli.exe
         $redisPath = "C:\Program Files\Redis"
         if (Test-Path $redisPath) {
+          Write-Host "Found Redis at: $redisPath"
           echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$redisPath;$env:PATH"
         }
         
         # Verify installation
-        Start-Sleep -Seconds 5
-        redis-cli --version
+        & "$redisPath\redis-cli.exe" --version
       shell: pwsh
       
     - name: 🔨 Restore dependencies
@@ -45,6 +49,12 @@ jobs:
       
     - name: 🧪 Run tests
       run: |
+        # Ensure redis-cli is in PATH for this step
+        $redisPath = "C:\Program Files\Redis"
+        if (Test-Path $redisPath) {
+          $env:PATH = "$redisPath;$env:PATH"
+        }
+        
         Write-Host "Running test suite..."
         .\run-tests.ps1 -Verbose -ContinueOnFailure
       shell: pwsh
