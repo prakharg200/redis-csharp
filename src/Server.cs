@@ -6,7 +6,26 @@ using System.Collections.Concurrent;
 ConcurrentDictionary<string, CacheEntry> dataStore = new ConcurrentDictionary<string, CacheEntry>();
 ConcurrentDictionary<string, List<string>> listStore = new ConcurrentDictionary<string, List<string>>();
 
-TcpListener server = new TcpListener(IPAddress.Any, 6379);
+int port = 6379;
+
+for (int i = 0; i < args.Length; i++)
+{
+    if (args[i] == "--port" && i + 1 < args.Length)
+    {
+        if (int.TryParse(args[i + 1], out int parsedPort))
+        {
+            port = parsedPort;
+        }
+    }
+}
+
+if (port < 1 || port > 65535)
+{
+    Console.WriteLine("Invalid port number. Please specify a port between 1 and 65535.");
+    return;
+}
+
+TcpListener server = new TcpListener(IPAddress.Any, port);
 server.Start();
 
 while (true)

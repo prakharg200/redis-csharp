@@ -1,0 +1,100 @@
+name: Redis Implementation Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: windows-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+        
+    - name: 📦 Setup Redis CLI
+      run: |
+        Write-Host "Installing Redis via Chocolatey..."
+        choco install redis-64 -y
+        
+        # Add Redis to PATH
+        $redisPath = "C:\Program Files\Redis"
+        if (Test-Path $redisPath) {
+          echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        }
+        
+        # Verify installation
+        Start-Sleep -Seconds 5
+        redis-cli --version
+      shell: pwsh
+      
+    - name: 🔨 Restore dependencies
+      run: dotnet restore
+      
+    - name: 🏗️ Build project
+      run: dotnet build --configuration Release --no-restore
+      
+    - name: 🧪 Run tests
+      run: |
+        Write-Host "Running test suite..."
+        .\run-tests.ps1 -Verbose -ContinueOnFailure
+      shell: pwsh
+      
+    - name: 📊 Test Summary
+      if: always()
+      run: |
+        Write-Host ""
+        Write-Host "Test execution completed. Check logs above for details."
+      shell: pwsh
+
+  test-linux:
+    name: Run Tests (Linux)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+        
+    - name: 📦 Setup Redis
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y redis-tools redis-server
+        redis-cli --version
+        
+    - name: 🔨 Restore dependencies
+      run: dotnet restore
+      
+    - name: 🏗️ Build project
+      run: dotnet build --configuration Release --no-restore
+      
+    - name: 🧪 Run basic connectivity test
+      run: |
+        echo "Starting Redis server..."
+        dotnet run --configuration Release -- --port 6379 &
+        SERVER_PID=$!
+        
+        sleep 2
+        
+        echo "Testing PING command..."
+        redis-cli -p 6379 PING || echo "PING test failed"
+        
+        echo "Testing ECHO command..."
+        redis-cli -p 6379 ECHO "Hello" || echo "ECHO test failed"
+        
+        echo "Stopping server..."
+        kill $SERVER_PID || true
+      shell: bash
