@@ -29,13 +29,37 @@ jobs:
         # Wait for installation to complete
         Start-Sleep -Seconds 5
         
-        # Find redis-cli.exe
-        $redisPath = "C:\Program Files\Redis"
-        if (Test-Path $redisPath) {
-          Write-Host "Found Redis at: $redisPath"
-          echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          $env:PATH = "$redisPath;$env:PATH"
+        # Find redis-cli.exe in common locations
+        $possiblePaths = @(
+          "C:\Program Files\Redis",
+          "C:\ProgramData\chocolatey\lib\redis-64\tools",
+          "C:\tools\redis"
+        )
+        
+        $redisPath = $null
+        foreach ($path in $possiblePaths) {
+          if (Test-Path "$path\redis-cli.exe") {
+            $redisPath = $path
+            Write-Host "Found Redis at: $redisPath"
+            break
+          }
         }
+        
+        if (-not $redisPath) {
+          Write-Host "Searching for redis-cli.exe..."
+          $found = Get-ChildItem -Path "C:\" -Recurse -Filter "redis-cli.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($found) {
+            $redisPath = $found.Directory.FullName
+            Write-Host "Found Redis at: $redisPath"
+          } else {
+            Write-Error "redis-cli.exe not found!"
+            exit 1
+          }
+        }
+        
+        # Add to PATH
+        echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        $env:PATH = "$redisPath;$env:PATH"
         
         # Verify installation
         & "$redisPath\redis-cli.exe" --version
@@ -50,9 +74,18 @@ jobs:
     - name: 🧪 Run tests
       run: |
         # Ensure redis-cli is in PATH for this step
-        $redisPath = "C:\Program Files\Redis"
-        if (Test-Path $redisPath) {
-          $env:PATH = "$redisPath;$env:PATH"
+        $possiblePaths = @(
+          "C:\Program Files\Redis",
+          "C:\ProgramData\chocolatey\lib\redis-64\tools",
+          "C:\tools\redis"
+        )
+        
+        foreach ($path in $possiblePaths) {
+          if (Test-Path "$path\redis-cli.exe") {
+            $env:PATH = "$path;$env:PATH"
+            Write-Host "Added Redis to PATH: $path"
+            break
+          }
         }
         
         Write-Host "Running test suite..."
