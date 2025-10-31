@@ -23,35 +23,35 @@ jobs:
         
     - name: 📦 Setup Redis CLI
       run: |
-        Write-Host "Installing Redis via Chocolatey..."
-        choco install redis-64 -y
+        Write-Host "Downloading Redis for Windows..."
+        $redisUrl = "https://github.com/redis-windows/redis-windows/releases/download/7.4.1/Redis-7.4.1-Windows-x64-msys2.zip"
+        $redisZip = "$env:TEMP\redis.zip"
+        $redisDir = "C:\redis"
         
-        # Wait for installation to complete
-        Start-Sleep -Seconds 5
+        # Download Redis
+        Invoke-WebRequest -Uri $redisUrl -OutFile $redisZip
         
-        # Check what's actually in the redis-64 directory
-        Write-Host "Checking redis-64 package contents..."
-        $redisPackagePath = "C:\ProgramData\chocolatey\lib\redis-64"
-        if (Test-Path $redisPackagePath) {
-          Write-Host "Contents of redis-64 package:"
-          Get-ChildItem $redisPackagePath -Recurse | ForEach-Object {
-            Write-Host "  $($_.FullName)"
-          }
+        # Extract
+        Write-Host "Extracting Redis..."
+        Expand-Archive -Path $redisZip -DestinationPath $redisDir -Force
+        
+        # Find redis-cli.exe
+        $redisCli = Get-ChildItem -Path $redisDir -Recurse -Filter "redis-cli.exe" | Select-Object -First 1
+        
+        if ($redisCli) {
+          $redisPath = $redisCli.Directory.FullName
+          Write-Host "Found redis-cli at: $redisPath"
+          
+          # Add to PATH
+          echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$redisPath;$env:PATH"
+          
+          # Verify
+          & "$redisPath\redis-cli.exe" --version
+        } else {
+          Write-Error "redis-cli.exe not found after extraction!"
+          exit 1
         }
-        
-        # Try direct choco list
-        Write-Host ""
-        Write-Host "Checking choco list..."
-        choco list --local-only redis
-        
-        # Check if redis-cli is available as a shim
-        Write-Host ""
-        Write-Host "Checking for redis-cli in PATH..."
-        Get-Command redis-cli -ErrorAction SilentlyContinue | ForEach-Object {
-          Write-Host "Found redis-cli at: $($_.Source)"
-        }
-        
-        exit 1
       shell: pwsh
       
     - name: 🔨 Restore dependencies
@@ -63,18 +63,13 @@ jobs:
     - name: 🧪 Run tests
       run: |
         # Ensure redis-cli is in PATH for this step
-        $possiblePaths = @(
-          "C:\Program Files\Redis",
-          "C:\ProgramData\chocolatey\lib\redis-64\tools",
-          "C:\tools\redis"
-        )
+        $redisDir = "C:\redis"
+        $redisCli = Get-ChildItem -Path $redisDir -Recurse -Filter "redis-cli.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
         
-        foreach ($path in $possiblePaths) {
-          if (Test-Path "$path\redis-cli.exe") {
-            $env:PATH = "$path;$env:PATH"
-            Write-Host "Added Redis to PATH: $path"
-            break
-          }
+        if ($redisCli) {
+          $redisPath = $redisCli.Directory.FullName
+          $env:PATH = "$redisPath;$env:PATH"
+          Write-Host "Added Redis to PATH: $redisPath"
         }
         
         Write-Host "Running test suite..."
