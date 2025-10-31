@@ -33,18 +33,20 @@ jobs:
         Write-Host "Checking redis-64 package contents..."
         $redisPackagePath = "C:\ProgramData\chocolatey\lib\redis-64"
         if (Test-Path $redisPackagePath) {
-          Write-Host "Contents of $redisPackagePath:"
+          Write-Host "Contents of redis-64 package:"
           Get-ChildItem $redisPackagePath -Recurse | ForEach-Object {
             Write-Host "  $($_.FullName)"
           }
         }
         
         # Try direct choco list
-        Write-Host "`nChecking choco list..."
+        Write-Host ""
+        Write-Host "Checking choco list..."
         choco list --local-only redis
         
         # Check if redis-cli is available as a shim
-        Write-Host "`nChecking for redis-cli in PATH..."
+        Write-Host ""
+        Write-Host "Checking for redis-cli in PATH..."
         Get-Command redis-cli -ErrorAction SilentlyContinue | ForEach-Object {
           Write-Host "Found redis-cli at: $($_.Source)"
         }
